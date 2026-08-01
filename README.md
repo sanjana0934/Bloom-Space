@@ -14,53 +14,45 @@ mothers talk to each other freely.
 - **LLM:** Groq API (Llama 3.3 70B) for the conversational support chat, with deterministic keyword-based fallback
 
 ## Architecture
-┌─────────────────────────────┐
-│ Browser │
-│ ┌─────────────────────────┐ │
-│ │ React SPA (Vite) │ │
-│ │ - Mom / Family views │ │
-│ │ - face-api.js (runs │ │
-│ │ fully on-device; │ │
-│ │ no photo ever sent) │ │
-│ └───────────┬─────────────┘ │
-└──────────────┼────────────────┘
-│ REST (JWT auth) + WebSocket
-▼
-┌─────────────────────────────────────┐
-│ Express API (Node.js) │
-│ ┌───────────────────────────────┐ │
-│ │ routes/ │ │
-│ │ auth epds crisis │ │
-│ │ chat nurse │ │
-│ └───────────────┬───────────────┘ │
-│ ┌───────────────▼───────────────┐ │
-│ │ services/llm.js │ │
-│ │ → calls Groq API for open- │ │
-│ │ ended chat replies only. │ │
-│ │ Crisis language NEVER │ │
-│ │ goes through the LLM — │ │
-│ │ it's caught by a keyword │ │
-│ │ check first, deterministically. │
-│ └────────────────────────────────┘ │
-│ ┌────────────────────────────────┐ │
-│ │ Socket.io │ │
-│ │ → real-time Bloom Space chat │ │
-│ └────────────────────────────────┘ │
-│ ┌────────────────────────────────┐ │
-│ │ SQLite (better-sqlite3) │ │
-│ │ users, family_links, │ │
-│ │ epds_responses, checkins, │ │
-│ │ crisis_logs, ai_nurse_scans, │ │
-│ │ anon_messages, anon_reactions │ │
-│ └────────────────────────────────┘ │
-└──────────────────┬────────────────────┘
-│ HTTPS
-▼
-┌───────────────────┐
-│ Groq API │
-│ (Llama 3.3 70B) │
-│ chat completions │
-└───────────────────┘
+
+```mermaid
+flowchart TB
+    subgraph Browser["🌐 Browser"]
+        SPA["React SPA (Vite)<br/>Mom / Family views"]
+        FaceAPI["face-api.js<br/>runs fully on-device<br/>no photo ever sent"]
+        SPA --> FaceAPI
+    end
+
+    subgraph Backend["⚙️ Express API (Node.js)"]
+        Routes["routes/<br/>auth · epds · crisis · chat · nurse"]
+        LLMService["services/llm.js<br/>calls Groq API for open-ended replies only"]
+        SocketIO["Socket.io<br/>real-time Bloom Space chat"]
+        DB[("SQLite<br/>users, family_links, epds_responses,<br/>checkins, crisis_logs, ai_nurse_scans,<br/>anon_messages, anon_reactions")]
+
+        Routes --> LLMService
+        Routes --> SocketIO
+        Routes --> DB
+    end
+
+    Groq["☁️ Groq API<br/>Llama 3.3 70B<br/>chat completions"]
+
+    Browser -->|"REST (JWT auth) + WebSocket"| Backend
+    LLMService -->|HTTPS| Groq
+
+    Crisis["🛑 Crisis language detection<br/>keyword check — deterministic,<br/>NEVER routed through the LLM"]
+    Routes -.->|"checked first"| Crisis
+```
+
+**Key design decision — safety before AI:** crisis-related language (self-harm, suicide,
+"emergency help") is caught by a deterministic keyword classifier *before* anything reaches the
+LLM. If it matches, the user always gets the same hard-coded response with real helpline numbers
+— the LLM is never in that path at all. The LLM only handles open-ended emotional support and
+casual conversation; baby-care tips (breastfeeding, sleep, etc.) are also static, curated content
+rather than LLM-generated, so factual accuracy doesn't depend on model behavior.
+
+**Privacy design — AI Nurse:** the mood-detection model (`face-api.js`, TensorFlow.js) runs
+entirely in the browser. The camera photo never leaves the device — only the detected mood label
+(e.g. "sad") and a confidence score are sent to the backend and stored.
 
 
 **Key design decision — safety before AI:** crisis-related language (self-harm, suicide,
@@ -151,15 +143,13 @@ Open `http://localhost:5173` in your browser.
 - **Mother-baby themed design system:** warm blush/rose palette, custom typography, no default
   UI library
 
-## Deployment
-- **Backend:** deployed on Render (Node web service). Note: the free tier has an ephemeral
-  filesystem, so the SQLite database resets on redeploy/restart unless a persistent disk is
-  attached (requires a paid instance type).
-- **Frontend:** deployed on Vercel. Set `VITE_API_URL` to the deployed backend URL — this is
-  baked in at build time, so redeploy the frontend if the backend URL changes.
 
 ## Important note
 This is a screening and awareness tool, not a diagnostic or clinical system. If you present
 this in interviews or your seminar, frame it that way — EPDS is a validated screening
 instrument and the AI Nurse is an approximate camera-based reading, not a diagnosis. Either
 should prompt a conversation with a real professional, not replace one.
+
+## Team Members
+Sanjana M Paul
+Neha Benny
