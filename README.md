@@ -151,5 +151,5 @@ instrument and the AI Nurse is an approximate camera-based reading, not a diagno
 should prompt a conversation with a real professional, not replace one.
 
 ## Team Members
-Sanjana M Paul
+Sanjana M Paul,
 Neha Benny
